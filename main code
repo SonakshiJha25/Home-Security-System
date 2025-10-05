@@ -1,0 +1,106 @@
+#include <LiquidCrystal.h>
+const int rs = 8, en = 9, d4 = 10, d5 = 11, d6 = 12, d7 = 13;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+
+#include <Wire.h>
+#include <MPU6050.h>
+MPU6050 mpu;
+
+int gas = A2;   // Gas sensor pin
+int fir = A5;   // Fire sensor pin
+
+int light = 6;  // Light output
+int fan = 3;    // Fan output
+int buz = 2;    // Buzzer
+
+#include "DHT.h"
+#define DHTPIN A0 
+#define DHTTYPE DHT11 
+DHT dht(DHTPIN, DHTTYPE);
+
+int cnt = 0;
+
+void setup() {
+  Serial.begin(9600);
+  dht.begin();
+
+  pinMode(buz, OUTPUT);
+  pinMode(gas, INPUT);
+  pinMode(fir, INPUT);
+  pinMode(light, OUTPUT);
+  pinMode(fan, OUTPUT);
+
+  lcd.begin(16, 2);
+  lcd.print("  WELCOME");
+  delay(1500);
+  lcd.clear();
+   digitalWrite(light, HIGH);
+ digitalWrite(fan, 0);
+  Wire.begin(); 
+  mpu.begin(MPU6050_SCALE_2000DPS, MPU6050_RANGE_2G); 
+  checkSettings();
+}
+
+void checkSettings() {
+  switch(mpu.getClockSource()) {
+    case MPU6050_CLOCK_KEEP_RESET:     break;
+    case MPU6050_CLOCK_EXTERNAL_19MHZ: break;
+    case MPU6050_CLOCK_EXTERNAL_32KHZ: break;
+    case MPU6050_CLOCK_PLL_ZGYRO:      break;
+    case MPU6050_CLOCK_PLL_YGYRO:      break;
+    case MPU6050_CLOCK_PLL_XGYRO:      break;
+    case MPU6050_CLOCK_INTERNAL_8MHZ:  break;
+  }
+  switch(mpu.getRange()) {
+    case MPU6050_RANGE_16G: break;
+    case MPU6050_RANGE_8G:  break;
+    case MPU6050_RANGE_4G:  break;
+    case MPU6050_RANGE_2G:  break;
+  }  
+}
+
+void loop() {
+  cnt++;
+
+  int h = dht.readHumidity();
+  int t = dht.readTemperature();
+  int gval = analogRead(gas);
+  int fval = digitalRead(fir);
+
+  Vector normAccel = mpu.readNormalizeAccel();
+  float xval = normAccel.XAxis;
+  float yval = normAccel.YAxis;
+  Serial.print("x:"+String(xval));
+    Serial.println("y:"+String(yval));
+  // LCD update
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("T:" + String(t) + " H:" + String(h));
+  lcd.setCursor(0,1);
+  lcd.print("GS:" + String(gval) + " F:" + String(fval));
+  delay(1500);
+
+  // Buzzer conditions
+  if((gval > 700) || (t > 40) || (h > 90) || (fval ==0)) {
+    digitalWrite(buz, HIGH);
+    delay(1000);
+    digitalWrite(buz, LOW);
+  } else {
+    digitalWrite(buz, LOW);
+  }
+
+  // Control outputs with MPU tilt
+  if(xval > 6) { 
+    digitalWrite(light, LOW);
+  }
+  else if(yval > 6) {
+    Serial.print("Y tilt > 6");
+    digitalWrite(light, HIGH);
+  }
+  else if(xval < -5) {
+    digitalWrite(fan, HIGH);
+  }
+  else if(yval < -6) {
+    digitalWrite(fan, LOW);
+  }
+}
